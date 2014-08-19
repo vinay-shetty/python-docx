@@ -16,16 +16,15 @@ import tempfile
 import zipfile
 import codecs
 
-ns = { 
-    'w'  :'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-    'wx' :'http://schemas.openxmlformats.org/wordprocessingml/2006/auxHint',
-    'wp' :'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
-    'a'  :'http://schemas.openxmlformats.org/drawingml/2006/main',
-    'pic':'http://schemas.openxmlformats.org/drawingml/2006/picture',
-    'r'  :'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-    'vt' :'http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes',
+ns = {
+    'w'  : 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+    'wx' : 'http://schemas.openxmlformats.org/wordprocessingml/2006/auxHint',
+    'wp' : 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+    'a'  : 'http://schemas.openxmlformats.org/drawingml/2006/main',
+    'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture',
+    'r'  : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+    'vt' : 'http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes',
     }
-       
 
 try:
     import matplotlib.figure
@@ -34,13 +33,15 @@ try:
 except:
     _have_matplotlib = False
 
-def open(fname = None, mode = 'copyonwrite'):
+
+def opendocument(fname=None, mode='copyonwrite'):
     '''Create a new (word) document, or load an existing document.
-    
+
     fname: File name
     mode: Open mode. 'copyonwrite' (default), 'update', 'append' or 'create'.
     '''
     return Document(fname, mode)
+
 
 class CustomProperty(object):
     '''Field of user settable properties.
@@ -49,7 +50,7 @@ class CustomProperty(object):
     custom values. Examples are the author, the document title, or a document
     id.
     '''
-    def __init__(self, parent, pfile = None):
+    def __init__(self, parent, pfile=None):
         self.parent = parent
         if pfile is not None:
             self.doc = minidom.parse(pfile)
@@ -59,8 +60,8 @@ class CustomProperty(object):
             p.setAttribute('xmlns', 'http://schemas.openxmlformats.org/officeDocument/2006/custom-properties')
             p.setAttribute('xmlns:vt', ns['vt'])
             self.doc.appendChild(p)
-            
-    def _get_TextNode(self, key, create = False):
+
+    def _get_TextNode(self, key, create=False):
         max_pid = 1
         for n in self.doc.getElementsByTagName('property'):
             max_pid = max(max_pid, int(n.getAttribute('pid')))
@@ -70,7 +71,8 @@ class CustomProperty(object):
             if create:
                 n = self.doc.createElement('property')
                 n.setAttribute('name', key)
-                n.setAttribute('pid', '%i' % (max_pid+1))
+                n.setAttribute('pid', '%i' % (max_pid + 1))
+                n.setAttribute('fmtid', '{D5CDD505-2E9C-101B-9397-08002B2CF9AE}')
                 self.doc.documentElement.appendChild(n)
             else:
                 return None
@@ -144,13 +146,13 @@ class CustomProperty(object):
             for rpr in wr.getElementsByTagName('w:rPr'):
                 wr.removeChild(rpr)
                 flds.appendChild(rpr)
-            
+
             wt = flds.ownerDocument.createElement('w:t')
             wt.appendChild(wp.ownerDocument.createTextNode(value))
             nwr.appendChild(wt)
             flds.appendChild(nwr)
             wp.replaceChild(flds, wr)
-                    
+
     def __getitem__(self, key):
         v = self._get_TextNode(key)
         return v.data or None
@@ -158,39 +160,42 @@ class CustomProperty(object):
     def __setitem__(self, key, value):
         self._get_TextNode(key, True).data = value
         self._update_field(self.parent.body, key, value)
-        self._update_field(self.parent.header.documentElement, key, value)
+        if self.parent.header:
+            self._update_field(self.parent.header.documentElement, key, value)
 
     def __iter__(self):
-        return iter(n.getAttribute('name') 
+        return iter(n.getAttribute('name')
                     for n in self.doc.getElementsByTagName('property'))
+
 
 class Settings(object):
     '''XML tree containing all document settings.
     '''
-    def __init__(self, sfile = None):
+    def __init__(self, sfile=None):
         if sfile is not None:
             self.doc = minidom.parse(sfile)
         else:
-            self.doc = minicom.Document()
+            self.doc = minidom.Document()
             p = self.doc.createElement('w:settings')
             p.setAttribute('xmlns:w', ns['w'])
             self.doc.appendChild(p)
+
 
 class Document(object):
     '''Main document.
 
     This contains the main document as well as all necessary subdocuments.
     '''
-    def __init__(self, fname = None, mode = 'copyonwrite'):
+    def __init__(self, fname=None, mode='copyonwrite'):
         '''Create a new (word) document, or load an existing document.
 
         fname: File name
-        mode: Open mode. 'copyonwrite' (default), 'update', 'append' or 
+        mode: Open mode. 'copyonwrite' (default), 'update', 'append' or
               'create'.
         '''
         self.fname = fname
         self.mode = mode
-        self.tmpdir = tempfile.mkdtemp(prefix = 'word')
+        self.tmpdir = tempfile.mkdtemp(prefix='word')
         worddir = os.path.join(self.tmpdir, 'word')
         self.mediadir = os.path.join(worddir, 'media')
         os.mkdir(worddir)
@@ -198,12 +203,13 @@ class Document(object):
         os.mkdir(os.path.join(self.tmpdir, 'docProps'))
         os.mkdir(os.path.join(self.tmpdir, '_rels'))
         os.mkdir(os.path.join(worddir, '_rels'))
-        self.media = { }
-        self.styles = { 'heading 1':'berschrift1', 'heading 2':'berschrift2', 
-                        'heading 3':'berschrift3', 'heading 4':'berschrift4',
-                        'heading 5':'berschrift5', 'heading 6':'berschrift6',
-                        'heading 7':'berschrift7', 'heading 8':'berschrift8',
-                        'caption':'Beschriftung', 'Normal':'Standard' }
+        self.media = {}
+        self.links = {}
+        self.styles = { 'heading 1': 'berschrift1', 'heading 2': 'berschrift2',
+                        'heading 3': 'berschrift3', 'heading 4': 'berschrift4',
+                        'heading 5': 'berschrift5', 'heading 6': 'berschrift6',
+                        'heading 7': 'berschrift7', 'heading 8': 'berschrift8',
+                        'caption': 'Beschriftung', 'Normal': 'Standard'}
         if fname is None or mode is 'create':
             self._createdefault()
         elif os.path.exists(fname):
@@ -237,16 +243,16 @@ class Document(object):
         content = minidom.Document()
         cTypes = content.createElement('Types')
         cTypes.setAttribute('xmlns', 'http://schemas.openxmlformats.org/package/2006/content-types')
-        mime_types = { 'png':'image/png', 
-                       'jpg':'image/jpeg', 
-                       'xml':'application/xml', 
-                       'rels':'application/vnd.openxmlformats-package.relationships+xml' }
+        mime_types = { 'png': 'image/png',
+                       'jpg': 'image/jpeg',
+                       'xml': 'application/xml',
+                       'rels': 'application/vnd.openxmlformats-package.relationships+xml'}
         for e, c in mime_types.items():
             type = content.createElement('Default')
             type.setAttribute('Extension', e)
             type.setAttribute('ContentType', c)
             cTypes.appendChild(type)
-        overrides = { '/word/document.xml':'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml' }
+        overrides = {'/word/document.xml': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'}
         for p, c in overrides.items():
             type = content.createElement('Override')
             type.setAttribute('PartName', p)
@@ -268,8 +274,12 @@ class Document(object):
         self.body = wdoc.getElementsByTagName('w:body')[0]
         relfile = zip.open('word/_rels/document.xml.rels')
         for n in minidom.parse(relfile).getElementsByTagName('Relationship'):
-            self.media[n.getAttribute('Id')] = ( n.getAttribute('Target'), 
-                                                 n.getAttribute('Type') )
+            if n.getAttribute('Type') != 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink':
+                self.media[n.getAttribute('Id')] = (n.getAttribute('Target'),
+                        n.getAttribute('Type'))
+            else:
+                self.links[n.getAttribute('Id')] = (n.getAttribute('Target'),
+                        n.getAttribute('Type'), n.getAttribute('TargetMode'))
         sdoc = minidom.parse(zip.open('word/styles.xml'))
         for s in sdoc.getElementsByTagName('w:style'):
             style_id = s.getAttribute('w:styleId')
@@ -277,7 +287,7 @@ class Document(object):
             style_name = n.getAttribute('w:val')
             self.styles[style_name] = style_id
         try:
-            self.property = CustomProperty(self, 
+            self.property = CustomProperty(self,
                                            zip.open('docProps/custom.xml'))
         except:
             self.property = None
@@ -324,7 +334,7 @@ class Document(object):
 
     def _xmlwrite(self, document, path):
         fp = codecs.open(os.path.join(self.tmpdir, path), 'w', 'utf-8')
-        document.writexml(fp, encoding = "UTF-8")
+        document.writexml(fp, encoding="UTF-8")
 #        document.writexml(fp, "", "  ", "\n", encoding = "UTF-8")
         fp.close()
 
@@ -335,16 +345,16 @@ class Document(object):
         self._xmlwrite(self.body.ownerDocument,
                        os.path.join('word', 'document.xml'))
         if self.property is not None:
-            self._xmlwrite(self.property.doc, 
+            self._xmlwrite(self.property.doc,
                            os.path.join('docProps', 'custom.xml'))
         if self.settings is not None:
-            self._xmlwrite(self.settings.doc, 
+            self._xmlwrite(self.settings.doc,
                            os.path.join('word', 'custom.xml'))
         if self.header is not None:
-            self._xmlwrite(self.header, 
+            self._xmlwrite(self.header,
                            os.path.join('word', 'header1.xml'))
         if self.numberings is not None:
-            self._xmlwrite(self.numberings.doc, 
+            self._xmlwrite(self.numberings.doc,
                            os.path.join('word', 'numbering.xml'))
         relations = minidom.Document()
         relsElem = relations.createElement("Relationships")
@@ -356,28 +366,36 @@ class Document(object):
             relshipElem.setAttribute("Type", type)
             relshipElem.setAttribute("Target", target)
             relsElem.appendChild(relshipElem)
-        self._xmlwrite(relations, 
+        for id, (target, type, mode) in self.links.items():
+            relshipElem = relations.createElement("Relationship")
+            relshipElem.setAttribute("Id", id)
+            relshipElem.setAttribute("Type", type)
+            relshipElem.setAttribute("Target", target)
+            relshipElem.setAttribute("TargetMode", mode)
+            relsElem.appendChild(relshipElem)
+        self._xmlwrite(relations,
                        os.path.join('word', "_rels", 'document.xml.rels'))
         f = zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED)
-        for dirpath,dirnames,filenames in os.walk(self.tmpdir):
+        for dirpath, dirnames, filenames in os.walk(self.tmpdir):
             for filename in filenames:
-                f.write(os.path.join(dirpath,filename),
-                        os.path.join(dirpath,filename).replace(self.tmpdir,''))
+                f.write(os.path.join(dirpath, filename),
+                        os.path.join(dirpath, filename).replace(self.tmpdir, ''))
         f.close()
 
     def flush(self):
         '''Flush all changes to disk.
-        
+
         This works only if the document was opened in 'update' or 'append'
         mode.
         '''
-        if ((self.mode is 'update' or self.mode is 'append') 
+
+        if ((self.mode is 'update' or self.mode is 'append')
             and self.fname is not None):
             self.writeto(self.fname)
 
     def close(self):
         '''Close the document and clean up the file space.
-        
+
         In 'update'/'append' mode, the changes are flushed to the document
         file.
         '''
@@ -387,11 +405,12 @@ class Document(object):
     def __del__(self):
         shutil.rmtree(self.tmpdir)
 
+
 class Text(object):
     '''Structure containing some text with the same formatting options.
-    
+
     '''
-    def __init__(self, content, bold = None, italic = None, underline = None):
+    def __init__(self, content, bold=None, italic=None, underline=None):
         self.content = content if isinstance(content, unicode) \
             else unicode(content)
         self.bold = bold
@@ -418,14 +437,14 @@ class Text(object):
             style = True
             wu = target.ownerDocument.createElement('w:u')
             styles = {
-                0:'off', False:'none',
-                1:'single', True:'single', '_':'single',
-                2:'double', '=':'double',
-                '#':'thick',
-                '-':'words',
-                ',':'dash',
-                '.':'dotted',
-                ';':'dot-dash',
+                0: 'off', False: 'none',
+                1: 'single', True: 'single', '_': 'single',
+                2: 'double', '=': 'double',
+                '#': 'thick',
+                '-': 'words',
+                ',': 'dash',
+                '.': 'dotted',
+                ';': 'dot-dash',
                 }
             wu.setAttribute('w:val', styles.get(self.underline, 'none'))
             rpr.appendChild(wu)
@@ -446,20 +465,21 @@ class Text(object):
             r.appendChild(t)
         target.appendChild(r)
 
+
 class Paragraph(object):
     '''Structure containing one text paragraph.
     '''
-    def __init__(self, content = None, style = None, align = None):
+    def __init__(self, content=None, style=None, align=None):
         self.style = style
         self.align = align
-        self.content = [ ]
+        self.content = []
         if content:
             self.__iadd__(content)
 
     def __iadd__(self, other):
         self.content.append(other if isinstance(other, Text) else Text(other))
 
-    def append_to(self, doc, target, indent = None, numbering = None):
+    def append_to(self, doc, target, indent=None, numbering=None):
         p = target.ownerDocument.createElement('w:p')
         if self.style is not None or self.align is not None or numbering is not None or indent is not None:
             pPr = target.ownerDocument.createElement('w:pPr')
@@ -468,10 +488,10 @@ class Paragraph(object):
                 pStyle.setAttribute('w:val', doc.styles[self.style])
                 pPr.appendChild(pStyle)
             alignments = {
-                'l':'left', 'left':'left', '<':'left',
-                'r':'right', 'right':'right', '>':'right',
-                'c':'center', 'center':'center', 
-                'b':'both', 'block':'both', 'both':'both', '=':'both',
+                'l': 'left', 'left': 'left', '<': 'left',
+                'r': 'right', 'right': 'right', '>': 'right',
+                'c': 'center', 'center': 'center',
+                'b': 'both', 'block': 'both', 'both': 'both', '=': 'both',
                 }
             a = alignments.get(self.align)
             if a:
@@ -496,16 +516,18 @@ class Paragraph(object):
             c.append_to(doc, p)
         target.appendChild(p)
 
+
 class Header(Paragraph):
     '''Caption header.
     '''
     def __init__(self, level, content):
-        Paragraph.__init__(self, content, style = 'heading %i' % level)
+        Paragraph.__init__(self, content, style='heading %i' % level)
+
 
 class Counter(Text):
     '''Counter, for table and figure captions
     '''
-    def __init__(self, name, bold = None, italic = None, underline = None):
+    def __init__(self, name, bold=None, italic=None, underline=None):
         Text.__init__(self, '0', bold, italic, underline)
         self.name = name
 
@@ -522,10 +544,11 @@ class Counter(Text):
         Text.append_to(self, doc, fld)
         target.appendChild(fld)
 
+
 class Caption(Paragraph):
     '''Table or figure caption
     '''
-    def __init__(self, name, content, style = 'caption'):
+    def __init__(self, name, content, style='caption'):
         Paragraph.__init__(self, content, style)
         self.name = name
         self.counter = Counter(name)
@@ -545,12 +568,13 @@ class Caption(Paragraph):
             c.append_to(doc, p)
         target.appendChild(p)
 
+
 class Table(object):
     '''Simple table.
-    
+
     cells should be a 2dim array.
     '''
-    def __init__(self, cells, caption = None, style = None):
+    def __init__(self, cells, caption=None, style=None):
         self.cells = cells
         if caption is not None:
             self.caption = Caption('Table', caption)
@@ -606,10 +630,11 @@ class Table(object):
             tr.appendChild(tc)
         target.appendChild(tr)
 
+
 class Figure(object):
     '''External image.
     '''
-    def __init__(self, fname, size, caption = None):
+    def __init__(self, fname, size, caption=None):
         self.fname = fname
         self.size = size
         if caption is not None:
@@ -691,20 +716,22 @@ class Figure(object):
         shutil.copy(self.figure, os.path.join(doc.mediadir, newname))
         return newname
 
+
 class MatplotlibFigure(Figure):
     '''Image made from a matplotlib figure
     '''
-    def __init__(self, fig, caption = None):
+    def __init__(self, fig, caption=None):
         Figure.__init__(self, 'matplotlib', fig.get_size_inches(), caption)
         self.fig = fig
 
     def _copy_media(self, doc):
         FigureCanvasAgg(self.fig)
-        tmpf = tempfile.mkstemp(dir = doc.mediadir, prefix = 'image',
-                                suffix = '.png')
+        tmpf = tempfile.mkstemp(dir=doc.mediadir, prefix='image',
+                                suffix='.png')
         os.close(tmpf[0])
-        self.fig.savefig(tmpf[1], format = 'png', dpi=300)
+        self.fig.savefig(tmpf[1], format='png', dpi=300)
         return os.path.basename(tmpf[1])
+
 
 class PageBreak(object):
     '''Page break
@@ -718,19 +745,20 @@ class PageBreak(object):
         p.appendChild(r)
         target.appendChild(p)
 
+
 class List(object):
     '''(Unnumbered) List
     '''
 
-    bullets = [ u'●', u'○', '-', u'•', u'◦', u'-', u'▪', u'▫', u'-' ]
+    bullets = [u'●', u'○', '-', u'•', u'◦', u'-', u'▪', u'▫', u'-']
 
-    def __init__(self, rows = None, style = None, align = None, format = None):
+    def __init__(self, rows=None, style=None, align=None, format=None):
         self.style = style
         self.align = align
         self.format = format
         self.indent = 360
         self.hanging = 360
-        self.rows = [ ]
+        self.rows = []
         if rows:
             for r in rows:
                 self.__iadd__(r)
@@ -744,31 +772,32 @@ class List(object):
                 if isinstance(r, (List, Paragraph)):
                     pr.append(r)
                 else:
-                    pr.append(Paragraph(r, style = self.style, 
-                                        align = self.align))
+                    pr.append(Paragraph(r, style=self.style,
+                                        align=self.align))
             self.rows.append(pr)
         else:
-            self.rows.append(Paragraph(row, style = self.style, 
-                                       align = self.align))
+            self.rows.append(Paragraph(row, style=self.style,
+                                       align=self.align))
 
-    def append_to(self, doc, target, parent = None, indent = 0):
+    def append_to(self, doc, target, parent=None, indent=0):
         indent += self.indent
         level = parent[0] + 1 if parent else 0
         format = self.format or List.bullets[level]
         numId = doc.numbering(parent, indent, self.hanging, format)
         for row in self.rows:
             if isinstance(row, List):
-                row.append_to(doc, target, numId, indent = indent)
+                row.append_to(doc, target, numId, indent=indent)
             elif isinstance(row, list):
-                row[0].append_to(doc, target, numbering = numId, 
-                                 indent = indent)
+                row[0].append_to(doc, target, numbering=numId,
+                                 indent=indent)
                 for r in row[1:]:
-                    r.append_to(doc, target, indent = indent)
+                    r.append_to(doc, target, indent=indent)
             else:
-                row.append_to(doc, target, numbering = numId, indent = indent)
+                row.append_to(doc, target, numbering=numId, indent=indent)
+
 
 class Numbering(object):
-    def __init__(self, sfile = None):
+    def __init__(self, sfile=None):
         self.nums = dict()
         self.maxnumber = 0
         if sfile is not None:
@@ -785,7 +814,7 @@ class Numbering(object):
             n.setAttribute('xmlns:w', ns['w'])
             self.doc.appendChild(n)
 
-    def _get_format(self, content, level = 0):
+    def _get_format(self, content, level=0):
         for cstart, c in enumerate(content):
             if c.isalnum():
                 break
@@ -793,8 +822,8 @@ class Numbering(object):
             if not c.isalnum():
                 break
         prefix = content[:cstart]
-        suffix = content[cstart+clen:]
-        c = content[cstart:cstart+clen]
+        suffix = content[cstart + clen:]
+        c = content[cstart:cstart + clen]
         if not c:
             start = None
             fmt = 'bullet'
@@ -804,10 +833,10 @@ class Numbering(object):
             start = int(c)
             txt = '%s%%%d%s' % (prefix, level + 1, suffix)
         else:
-            formats = { 'a':'lowerLetter', 
-                        'A':'upperLetter',
-                        'i':'lowerRoman',
-                        'I':'upperRoman',
+            formats = { 'a': 'lowerLetter',
+                        'A': 'upperLetter',
+                        'i': 'lowerRoman',
+                        'I': 'upperRoman',
                         }
             fmt = formats.get(c)
             start = 1
@@ -833,7 +862,7 @@ class Numbering(object):
         num.appendChild(ani)
         rootElement.appendChild(num)
         self.maxnumber += 1
-        self.nums[self.maxnumber] = { 0:an }
+        self.nums[self.maxnumber] = {0: an}
         return an, self.maxnumber
 
     def add(self, parent, indent, hanging, content):
@@ -842,7 +871,7 @@ class Numbering(object):
             level = parent[0] + 1
             an = n.get(parent[0])
             numId = parent[1]
-            self.nums[numId][level] = an 
+            self.nums[numId][level] = an
         else:
             level = 0
             an, numId = self._new_numbering()
